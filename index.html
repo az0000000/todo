@@ -39,9 +39,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;ba
   .search-wrap{display:none}
   .hdr-btn#connectSaveBtn{display:none}
   button[onclick="resetWeek()"]{display:none}
-  .hdr-btn[data-action="people-toggle"]{display:none}
   .saved-lbl{display:none}
-  #gistSyncStatus{font-size:11px;padding:3px 7px;margin-left:0}
+  #gistSyncStatus{font-size:11px;padding:3px 7px;margin-left:0;border-color:rgba(255,255,255,.3)}
   .wrap{padding:8px 6px 60px}
   .task{padding:8px 8px}
   .task-btns{flex-wrap:wrap;gap:3px}
@@ -49,8 +48,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;ba
   .z1-hd{padding:10px 10px}
   .sec-hd{padding:9px 10px}
   .summary-banner{margin:0 0 8px;border-radius:8px}
-  .sb-hd{padding:8px 10px;gap:6px}
+  .sb-hd{padding:8px 10px;gap:6px;flex-wrap:wrap}
   .sb-body{padding:8px 10px;font-size:13px}
+  .sb-refresh,.sb-minimize{font-size:10px;padding:1px 6px}
   .hdr-title{font-size:16px}
 }
 .z1-foot{padding:8px 14px;background:#F5F8FB;border-top:1px solid #E4EBF0}
@@ -245,7 +245,7 @@ details[open] > .sec-hd .sec-arr{transform:rotate(90deg)}
   <div class="hdr-right">
     <span class="saved-lbl" id="savedLbl">&#10003; Auto-saved</span>
     <button class="hdr-btn" id="connectSaveBtn" onclick="connectSaveFile()" title="Changes auto-save in browser. Click to also sync to todo_state.json on disk.">&#128193; Sync to disk</button>
-    <span id="gistSyncStatus" onclick="openGistSetup()" title="Click to configure GitHub Gist cross-device sync" style="font-size:12px;color:#bbb;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid #e8e8e8;margin-left:2px;white-space:nowrap;user-select:none">&#11041; Cloud sync</span>
+    <span id="gistSyncStatus" onclick="openGistSetup()" title="Click to configure GitHub Gist cross-device sync" style="font-size:12px;color:rgba(255,255,255,.55);cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.3);margin-left:2px;white-space:nowrap;user-select:none">&#11041; Cloud sync</span>
     <button class="hdr-btn" onclick="resetWeek()">&#8635; Reset week</button>
   </div>
 </div>
@@ -476,7 +476,7 @@ function _setSyncStatus(status) {
   const el = document.getElementById('gistSyncStatus');
   if (!el) return;
   const map = { idle:'⬡ Cloud sync', syncing:'↻ Syncing…', synced:'✓ Synced', error:'✗ Sync error', off:'⬡ Cloud sync' };
-  const col = { idle:'#888', syncing:'#F39C12', synced:'#27AE60', error:'#E74C3C', off:'#bbb' };
+  const col = { idle:'rgba(255,255,255,.55)', syncing:'#F39C12', synced:'#82E0AA', error:'#E74C3C', off:'rgba(255,255,255,.35)' };
   el.textContent = map[status] || map.idle;
   el.style.color  = col[status]  || col.idle;
 }
@@ -491,11 +491,24 @@ async function gistFetch() {
     });
     if (!r.ok) { _setSyncStatus('error'); return null; }
     const data = await r.json();
-    const content = data.files?.['todo_state.json']?.content;
-    if (!content) { _setSyncStatus('synced'); return null; }
+    const stateContent   = data.files?.['todo_state.json']?.content;
+    const summaryContent = data.files?.['daily_summary.json']?.content;
     _setSyncStatus('synced');
-    return JSON.parse(content);
+    return {
+      state:   stateContent   ? JSON.parse(stateContent)   : null,
+      summary: summaryContent ? JSON.parse(summaryContent) : null
+    };
   } catch(e) { _setSyncStatus('error'); return null; }
+}
+
+function _applySummaryBanner(summary) {
+  if (!summary || !summary.text) return;
+  const banner = document.getElementById('summaryBanner');
+  const sbBody = document.getElementById('sbBody');
+  const sbDate = document.getElementById('sbDate');
+  if (sbBody) sbBody.textContent = summary.text;
+  if (sbDate && summary.generated) sbDate.textContent = new Date(summary.generated).toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+  if (banner) banner.style.display = '';
 }
 
 let _gistPushTimer = null;
@@ -508,11 +521,12 @@ async function _gistPush() {
   if (!cfg || !cfg.token || !cfg.gistId) return;
   _setSyncStatus('syncing');
   try {
-    await fetch(`https://api.github.com/gists/${cfg.gistId}`, {
+    const r = await fetch(`https://api.github.com/gists/${cfg.gistId}`, {
       method: 'PATCH',
       headers: { Authorization: `token ${cfg.token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ files: { 'todo_state.json': { content: JSON.stringify(ST) } } })
     });
+    if (!r.ok) { _setSyncStatus('error'); return; }
     _setSyncStatus('synced');
   } catch(e) { _setSyncStatus('error'); }
 }
@@ -553,7 +567,8 @@ async function gistSetupSave() {
   if(msg) msg.innerHTML='<span style="color:#F39C12">Testing connection…</span>';
   _gistSave({ token, gistId });
   // Test: fetch the gist
-  const remote = await gistFetch();
+  const fetched = await gistFetch();
+  const remote = fetched?.state ?? null;
   if (remote === null && _gistCfg()) {
     // might be new empty gist — push current state
     await _gistPush();
@@ -568,6 +583,7 @@ async function gistSetupSave() {
       _fixGarbledLabels();
       persist();
       _rerender();
+      if (fetched?.summary) _applySummaryBanner(fetched.summary);
       if(msg) msg.innerHTML='<span style="color:#27AE60">✓ Connected! Remote state was newer — dashboard updated.</span>';
     } else {
       await _gistPush();
@@ -2149,20 +2165,23 @@ updateSaveBtn();
   const connected = await _tryAutoConnect();
   if (connected) _rerender();
   updateSaveBtn();
-  // Gist sync — pull remote state, merge if newer
+  // Gist sync — pull remote state + morning briefing, merge if newer
   if (_gistCfg()) {
     _setSyncStatus('syncing');
-    const remote = await gistFetch();
-    if (remote) {
-      const localTs  = ST._ts  || 0;
-      const remoteTs = remote._ts || 0;
-      if (remoteTs > localTs) {
+    const fetched = await gistFetch();
+    if (fetched) {
+      const remote   = fetched.state;
+      const localTs  = ST._ts || 0;
+      const remoteTs = remote?._ts || 0;
+      if (remote && remoteTs > localTs) {
         ST = Object.assign({}, EMBEDDED, remote);
         ensureStateKeys();
         _fixGarbledLabels();
         persist();
         _rerender();
       }
+      // Always apply the latest morning briefing from Gist regardless of state timestamp
+      if (fetched.summary) _applySummaryBanner(fetched.summary);
     }
   } else {
     _setSyncStatus('off');
