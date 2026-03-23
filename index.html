@@ -33,6 +33,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;ba
 .z1-prog{font-size:12px;font-weight:700;background:rgba(255,255,255,.2);padding:3px 11px;border-radius:12px}
 .z1-grid{display:grid;grid-template-columns:1fr 1fr;background:#E4EBF0;gap:1px}
 @media(max-width:640px){.z1-grid{grid-template-columns:1fr}}
+@media(max-width:680px){
+  .hdr{padding:0 10px;gap:6px;height:46px}
+  .hdr-date{display:none}
+  .search-wrap{display:none}
+  .hdr-btn#connectSaveBtn{display:none}
+  button[onclick="resetWeek()"]{display:none}
+  .hdr-btn[data-action="people-toggle"]{display:none}
+  .saved-lbl{display:none}
+  #gistSyncStatus{font-size:11px;padding:3px 7px;margin-left:0}
+  .wrap{padding:8px 6px 60px}
+  .task{padding:8px 8px}
+  .task-btns{flex-wrap:wrap;gap:3px}
+  .task-top{flex-wrap:nowrap}
+  .z1-hd{padding:10px 10px}
+  .sec-hd{padding:9px 10px}
+  .summary-banner{margin:0 0 8px;border-radius:8px}
+  .sb-hd{padding:8px 10px;gap:6px}
+  .sb-body{padding:8px 10px;font-size:13px}
+  .hdr-title{font-size:16px}
+}
 .z1-foot{padding:8px 14px;background:#F5F8FB;border-top:1px solid #E4EBF0}
 .task{display:flex;align-items:flex-start;gap:8px;padding:10px 12px;background:#fff;position:relative}
 .wtask{padding:10px 13px}
@@ -394,7 +414,8 @@ details[open] > .sec-hd .sec-arr{transform:rotate(90deg)}
 </div>
 
 <script>
-var EMBEDDED = {}; // web version — state loads from Gist
+var EMBEDDED = {}; // web version
+// browser_js.js — all browser-side JS for Adam's To-Do Dashboard
 // ES6+ fine here; this file is embedded via fs.readFileSync in todo_list.js
 
 const STORAGE_KEY = 'todo-state';
